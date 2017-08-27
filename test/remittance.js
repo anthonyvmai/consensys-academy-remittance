@@ -6,17 +6,18 @@ contract("Remittance", accounts => {
     const carol = accounts[1];
     const sent = 4;
 
-    const bobPwHex = "0x1111111111111111111111111111111111111111111111111111111111111111"
-    const carolPwHex = "0x2222222222222222222222222222222222222222222222222222222222222222"
-
-    const bobPwHash = web3.sha3(bobPwHex, {encoding: "hex"});
-    const carolPwHash = web3.sha3(carolPwHex, {encoding: "hex"});
+    const bobPw = "0x1111111111111111111111111111111111111111111111111111111111111111"
+    const carolPw = "0x2222222222222222222222222222222222222222222222222222222222222222"
 
     var instance;
 
     beforeEach(() => {
-        return Remittance.new(bobPwHash, carolPwHash, {from: alice, value: sent}).then(thisInstance => {
-            instance = thisInstance;
+        return Remittance.deployed().then(oldInstance => {
+            return oldInstance.keccakTwo(bobPw, carolPw)
+        }).then(pwHash => {
+            return Remittance.new(pwHash, carol, {from: alice, value: sent})
+        }).then(newInstance => {
+            instance = newInstance;
         });
     });
 
@@ -27,7 +28,7 @@ contract("Remittance", accounts => {
     });
 
     it("should allow Carol to withdraw with correct passwords", () => {
-        return instance.withdraw(bobPwHex, carolPwHex, {from: carol}).then(tx => {
+        return instance.withdraw(bobPw, carolPw, {from: carol}).then(tx => {
             assert.isOk(tx, "Carol's withdrawal failed")
         });
     });
@@ -36,7 +37,7 @@ contract("Remittance", accounts => {
         const beforeEthBalance = web3.eth.getBalance(carol);
         const gasPrice = 10;
 
-        return instance.withdraw(bobPwHex, carolPwHex, {from: carol, gasPrice: gasPrice}).then(tx => {
+        return instance.withdraw(bobPw, carolPw, {from: carol, gasPrice: gasPrice}).then(tx => {
             const weiUsed = tx.receipt.gasUsed * gasPrice;
             const afterEthBalance = web3.eth.getBalance(carol);
             assert.deepEqual(beforeEthBalance.minus(weiUsed).plus(web3.toBigNumber(sent)), afterEthBalance,
