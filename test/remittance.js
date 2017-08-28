@@ -1,5 +1,7 @@
 var Remittance = artifacts.require("./Remittance.sol");
 
+require('bluebird').promisifyAll(web3.eth, { suffix: "Promise" });
+
 contract("Remittance", accounts => {
 
     const alice = accounts[0];
@@ -22,7 +24,7 @@ contract("Remittance", accounts => {
     });
 
     it("should deploy with balance", () => {
-        return instance.balance().then(balance => {
+        return web3.eth.getBalancePromise(instance.address).then(balance => {
             assert.equal(balance, sent, "balance is not equal to amount sent");
         });
     });
@@ -34,15 +36,21 @@ contract("Remittance", accounts => {
     });
 
     it("should give Carol the correct amount when she withdraws", () => {
-        const beforeEthBalance = web3.eth.getBalance(carol);
         const gasPrice = 10;
 
-        return instance.withdraw(bobPw, carolPw, {from: carol, gasPrice: gasPrice}).then(tx => {
-            const weiUsed = tx.receipt.gasUsed * gasPrice;
-            const afterEthBalance = web3.eth.getBalance(carol);
-            assert.deepEqual(beforeEthBalance.minus(weiUsed).plus(web3.toBigNumber(sent)), afterEthBalance,
+        var beforeWeiBalance;
+        var weiUsed;
+
+        return web3.eth.getBalancePromise(carol).then(balance => {
+            beforeWeiBalance = balance;
+            return instance.withdraw(bobPw, carolPw, {from: carol, gasPrice: gasPrice});
+        }).then(tx => {
+            weiUsed = tx.receipt.gasUsed * gasPrice;
+            return web3.eth.getBalancePromise(carol);
+        }).then(afterWeiBalance => {
+            assert.deepEqual(beforeWeiBalance.minus(weiUsed).plus(web3.toBigNumber(sent)), afterWeiBalance,
                 "Carol's wei balance did not increase by amount deposited by Alice");
-            return instance.balance();
+            return web3.eth.getBalancePromise(instance.address);
         }).then(balance => {
             assert.equal(balance, 0, "balance isn't 0 after withdrawal")
         });
